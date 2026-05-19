@@ -1,0 +1,28 @@
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# Secrets — never commit these
+.env
+backend/.env
+frontend/.env
+frontend/.env.local
+
+# Build output
+frontend/dist/
+
+# Logs
+*.log
+server.log
+server.err.log
+server.detached.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# AI agent internal files
+.agents/
+
+# Editor
+.vscode/
