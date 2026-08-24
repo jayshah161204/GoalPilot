@@ -28,10 +28,15 @@ require('dotenv').config({ path: path.join(__dirname, '.env') })
 const app = express()
 app.set('trust proxy', 1)
 
-const DEFAULT_MONGO_URI = 'mongodb+srv://202512059_db_user:yashvi2003@cluster0.c6b4hyt.mongodb.net/goalpilot?retryWrites=true&w=majority'
-const DEFAULT_JWT_SECRET = 'goalpilot_super_secret_key_2026'
+const getMongoURI = () => {
+  const envURI = (process.env.MONGODB_URI || '').trim()
+  if (envURI.startsWith('mongodb+srv://')) {
+    return envURI
+  }
+  return 'mongodb+srv://202512059_db_user:yashvi2003@cluster0.c6b4hyt.mongodb.net/goalpilot?retryWrites=true&w=majority'
+}
 
-process.env.MONGODB_URI = process.env.MONGODB_URI || DEFAULT_MONGO_URI
+process.env.MONGODB_URI = getMongoURI()
 process.env.JWT_SECRET = process.env.JWT_SECRET || DEFAULT_JWT_SECRET
 
 const configuredOrigins = (process.env.CORS_ORIGIN || '')
@@ -59,7 +64,6 @@ app.use(cors({
     if (!origin || allowedOrigins.has(origin) || origin.endsWith('.vercel.app')) {
       return callback(null, true)
     }
-    // Allow for cross-origin client apps while keeping header controls
     callback(null, true)
   },
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -67,10 +71,6 @@ app.use(cors({
 }))
 
 // Sanitize user input — removes $ and . from keys to prevent NoSQL injection
-// (registered after express.json so req.body is parsed first)
-
-// ─── Parsing & Logging ────────────────────────────────────────────────────────
-// Limit body to 1MB to prevent large payload attacks
 app.use(express.json({ limit: '1mb' }))
 app.use(mongoSanitize)
 
@@ -79,9 +79,34 @@ if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'))
 }
 
+// ─── Database Connection & Serverless Helper ──────────────────────────────────
+let isConnected = false
+
+const connectDB = async () => {
+  if (isConnected && mongoose.connection.readyState === 1) {
+    return
+  }
+  const uri = getMongoURI()
+  await mongoose.connect(uri, {
+    serverSelectionTimeoutMS: 8000,
+    socketTimeoutMS: 30000
+  })
+  isConnected = true
+}
+
+// Ensure database connection before handling API routes
+app.use(async (req, res, next) => {
+  try {
+    await connectDB()
+    next()
+  } catch (err) {
+    console.error('Database connection error:', err.message)
+    res.status(500).json({ error: `Database connection failed: ${err.message}` })
+  }
+})
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/auth', require('./routes/auth'))
-// Each route module mounts its own auth middleware
 app.use('/api/tasks', require('./routes/tasks'))
 app.use('/api/notes', require('./routes/notes'))
 app.use('/api/goals', require('./routes/goals'))
@@ -99,34 +124,6 @@ app.use((req, res) => {
 // ─── Global Error Handler ─────────────────────────────────────────────────────
 // Must be registered LAST — catches all errors thrown by routes/middleware
 app.use(errorHandler)
-
-// ─── Database Connection & Serverless Helper ──────────────────────────────────
-let isConnected = false
-
-const connectDB = async () => {
-  if (isConnected || mongoose.connection.readyState === 1) {
-    return
-  }
-  if (!process.env.MONGODB_URI) {
-    console.warn('⚠️ MONGODB_URI is not defined in environment variables')
-    return
-  }
-  await mongoose.connect(process.env.MONGODB_URI, {
-    serverSelectionTimeoutMS: 5000
-  })
-  isConnected = true
-}
-
-// Ensure database connection before handling API routes
-app.use(async (req, res, next) => {
-  try {
-    await connectDB()
-    next()
-  } catch (err) {
-    console.error('Database connection error:', err.message)
-    res.status(500).json({ error: 'Database connection failed' })
-  }
-})
 
 // ─── Standalone Server Start (Local Development) ──────────────────────────────
 if (require.main === module) {
