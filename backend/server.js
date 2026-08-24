@@ -26,6 +26,14 @@ const errorHandler = require('./middleware/errorHandler')
 require('dotenv').config({ path: path.join(__dirname, '.env') })
 
 const app = express()
+app.set('trust proxy', 1)
+
+const DEFAULT_MONGO_URI = 'mongodb://202512059_db_user:yashvi2003@ac-hgjo8rw-shard-00-00.c6b4hyt.mongodb.net:27017,ac-hgjo8rw-shard-00-01.c6b4hyt.mongodb.net:27017,ac-hgjo8rw-shard-00-02.c6b4hyt.mongodb.net:27017/goalpilot?ssl=true&replicaSet=atlas-fjzfuv-shard-0&authSource=admin&appName=Cluster0'
+const DEFAULT_JWT_SECRET = 'goalpilot_super_secret_key_2026'
+
+process.env.MONGODB_URI = process.env.MONGODB_URI || DEFAULT_MONGO_URI
+process.env.JWT_SECRET = process.env.JWT_SECRET || DEFAULT_JWT_SECRET
+
 const configuredOrigins = (process.env.CORS_ORIGIN || '')
   .split(',')
   .map(origin => origin.trim())
@@ -40,8 +48,10 @@ const allowedOrigins = new Set([
 ])
 
 // ─── Security Middleware ──────────────────────────────────────────────────────
-// helmet sets ~15 secure HTTP response headers automatically
-app.use(helmet())
+// helmet sets secure HTTP response headers automatically
+app.use(helmet({
+  contentSecurityPolicy: false
+}))
 
 // Only allow requests from configured frontend origins and Vercel domains
 app.use(cors({

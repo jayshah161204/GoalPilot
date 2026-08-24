@@ -47,9 +47,11 @@ const errorHandler = (err, req, res, next) => {
     return res.status(err.statusCode).json({ error: err.message })
   }
 
-  // --- Unknown / programming bug — never leak internals to client ---
+  // --- Unknown / programming error ---
   console.error('[UNHANDLED ERROR]', err)
-  res.status(500).json({ error: 'Something went wrong on our end. Please try again.' })
+  res.status(500).json({
+    error: err.message || 'Something went wrong on our end. Please try again.'
+  })
 }
 
 module.exports = errorHandler

@@ -10,9 +10,10 @@ const rateLimit = require('express-rate-limit')
  */
 const aiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 20,
+  max: 30,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: {
     error: 'Too many AI requests. Please wait a moment before sending another message.'
   }
@@ -23,13 +24,14 @@ const aiLimiter = rateLimit({
  *
  * Prevents brute-force attacks on login and register endpoints.
  *
- * Limit: 20 requests per IP per 15 minutes.
+ * Limit: 30 requests per IP per 15 minutes.
  */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,
+  max: 30,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: {
     error: 'Too many authentication attempts. Please try again in 15 minutes.'
   }
