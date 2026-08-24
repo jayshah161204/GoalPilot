@@ -28,7 +28,7 @@ require('dotenv').config({ path: path.join(__dirname, '.env') })
 const app = express()
 app.set('trust proxy', 1)
 
-const DEFAULT_MONGO_URI = 'mongodb://202512059_db_user:yashvi2003@ac-hgjo8rw-shard-00-00.c6b4hyt.mongodb.net:27017,ac-hgjo8rw-shard-00-01.c6b4hyt.mongodb.net:27017,ac-hgjo8rw-shard-00-02.c6b4hyt.mongodb.net:27017/goalpilot?ssl=true&replicaSet=atlas-fjzfuv-shard-0&authSource=admin&appName=Cluster0'
+const DEFAULT_MONGO_URI = 'mongodb+srv://202512059_db_user:yashvi2003@cluster0.c6b4hyt.mongodb.net/goalpilot?retryWrites=true&w=majority'
 const DEFAULT_JWT_SECRET = 'goalpilot_super_secret_key_2026'
 
 process.env.MONGODB_URI = process.env.MONGODB_URI || DEFAULT_MONGO_URI
