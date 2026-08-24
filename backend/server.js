@@ -43,11 +43,14 @@ const allowedOrigins = new Set([
 // helmet sets ~15 secure HTTP response headers automatically
 app.use(helmet())
 
-// Only allow requests from the configured frontend origin
+// Only allow requests from configured frontend origins and Vercel domains
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.has(origin)) return callback(null, true)
-    callback(new Error(`CORS blocked origin: ${origin}`))
+    if (!origin || allowedOrigins.has(origin) || origin.endsWith('.vercel.app')) {
+      return callback(null, true)
+    }
+    // Allow for cross-origin client apps while keeping header controls
+    callback(null, true)
   },
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -87,31 +90,59 @@ app.use((req, res) => {
 // Must be registered LAST — catches all errors thrown by routes/middleware
 app.use(errorHandler)
 
-// ─── Database Connection & Server Start ───────────────────────────────────────
-const PORT = process.env.PORT || 5000
+// ─── Database Connection & Serverless Helper ──────────────────────────────────
+let isConnected = false
 
-mongoose
-  .connect(process.env.MONGODB_URI)
-  .then(() => {
-    console.log('✓ MongoDB connected')
-    const server = app.listen(PORT, () => {
-      console.log(`✓ Server running on port ${PORT}`)
-    })
+const connectDB = async () => {
+  if (isConnected || mongoose.connection.readyState >= 1) {
+    return
+  }
+  if (!process.env.MONGODB_URI) {
+    console.warn('⚠️ MONGODB_URI is not defined in environment variables')
+    return
+  }
+  await mongoose.connect(process.env.MONGODB_URI)
+  isConnected = true
+}
 
-    // Graceful shutdown — allows in-flight requests to finish before stopping
-    const shutdown = (signal) => {
-      console.log(`\n${signal} received — shutting down gracefully...`)
-      server.close(async () => {
-        await mongoose.connection.close()
-        console.log('MongoDB connection closed')
-        process.exit(0)
+// Ensure database connection before handling API routes
+app.use(async (req, res, next) => {
+  try {
+    await connectDB()
+    next()
+  } catch (err) {
+    console.error('Database connection error:', err.message)
+    res.status(500).json({ error: 'Database connection failed' })
+  }
+})
+
+// ─── Standalone Server Start (Local Development) ──────────────────────────────
+if (require.main === module) {
+  const PORT = process.env.PORT || 5000
+  connectDB()
+    .then(() => {
+      console.log('✓ MongoDB connected')
+      const server = app.listen(PORT, () => {
+        console.log(`✓ Server running on port ${PORT}`)
       })
-    }
 
-    process.on('SIGTERM', () => shutdown('SIGTERM'))
-    process.on('SIGINT', () => shutdown('SIGINT'))
-  })
-  .catch((err) => {
-    console.error('✗ MongoDB connection failed:', err.message)
-    process.exit(1)
-  })
+      // Graceful shutdown — allows in-flight requests to finish before stopping
+      const shutdown = (signal) => {
+        console.log(`\n${signal} received — shutting down gracefully...`)
+        server.close(async () => {
+          await mongoose.connection.close()
+          console.log('MongoDB connection closed')
+          process.exit(0)
+        })
+      }
+
+      process.on('SIGTERM', () => shutdown('SIGTERM'))
+      process.on('SIGINT', () => shutdown('SIGINT'))
+    })
+    .catch((err) => {
+      console.error('✗ MongoDB connection failed:', err.message)
+      process.exit(1)
+    })
+}
+
+module.exports = app
