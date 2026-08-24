@@ -90,8 +90,7 @@ Always reference actual task and goal names from this data. Never give generic a
     userId: req.user._id,
     userMessage: message,
     assistantReply: reply,
-    currentMemory: memory,
-    groq
+    currentMemory: memory
   }).catch(e => console.error('[chat] Memory update failed:', e))
 
   await Promise.all([

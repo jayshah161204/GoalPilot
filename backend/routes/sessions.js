@@ -598,8 +598,7 @@ router.post('/:id/message', aiLimiter, validate(sendMessageSchema), asyncHandler
     userId: req.user._id,
     userMessage: content,
     assistantReply: reply,
-    currentMemory: memory,
-    groq
+    currentMemory: memory
   }).catch(e => console.error('[sessions] Memory update failed:', e))
 
   // Secondary LLM call — extract actions/suggestions from conversation
