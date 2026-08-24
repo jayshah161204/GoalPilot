@@ -50,6 +50,7 @@ router.patch('/:id/toggle', validate(toggleHabitSchema), asyncHandler(async (req
     habit.completedDates.push(date) // Mark complete
   }
 
+  habit.markModified('completedDates')
   await habit.save()
   res.json(habit)
 }))

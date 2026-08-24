@@ -7,7 +7,7 @@ const Goal = require('../models/goal')
 const protect = require('../middleware/auth')
 const asyncHandler = require('../utils/asyncHandler')
 const { aiLimiter } = require('../middleware/rateLimiter')
-const { getGroqClient } = require('../utils/groqClient')
+const { getGroqClient, getChatCompletion } = require('../utils/groqClient')
 const { formatMemoryForPrompt, getUserMemory, updateUserMemoryFromConversation } = require('../utils/aiMemory')
 
 router.use(protect)
@@ -75,18 +75,15 @@ ${userMemory}
 
 Always reference actual task and goal names from this data. Never give generic advice when you have specifics. Be concise (3-4 sentences). Suggest specific items to work on when asked.`
 
-  const groq = getGroqClient()
-  const completion = await groq.chat.completions.create({
-    model: 'llama-3.1-8b-instant',
-    max_tokens: 300,
+  const reply = await getChatCompletion({
     messages: [
       { role: 'system', content: systemPrompt },
       ...historyMessages,
       { role: 'user', content: message }
-    ]
+    ],
+    max_tokens: 350,
+    temperature: 0.5
   })
-
-  const reply = completion.choices[0].message.content
 
   // Update persistent memory — fire and forget
   updateUserMemoryFromConversation({

@@ -9,8 +9,7 @@ const protect = require('../middleware/auth')
 const asyncHandler = require('../utils/asyncHandler')
 const AppError = require('../utils/AppError')
 const validate = require('../middleware/validate')
-const { aiLimiter } = require('../middleware/rateLimiter')
-const { getGroqClient } = require('../utils/groqClient')
+const { getGroqClient, getChatCompletion } = require('../utils/groqClient')
 const { sendMessageSchema } = require('../validators/sessionSchemas')
 const { formatMemoryForPrompt, getUserMemory, updateUserMemoryFromConversation } = require('../utils/aiMemory')
 
@@ -273,14 +272,11 @@ pending=${tasks.map(t => `${t.title}(${t.priority})`).join(', ')}
 overdue=${overdue.map(t => t.title).join(', ')}
 goals=${goals.map(g => `${g.title} ${g.progress}%`).join(', ')}`
 
-  const groq = getGroqClient()
-  const completion = await groq.chat.completions.create({
-    model: 'llama-3.1-8b-instant',
-    max_tokens: 400,
-    messages: [{ role: 'user', content: prompt }]
-  })
-
-  const text = (completion.choices[0]?.message?.content || '[]').trim()
+  const text = await getChatCompletion({
+    messages: [{ role: 'user', content: prompt }],
+    max_tokens: 450,
+    temperature: 0.3
+  }).catch(() => '[]')
   const clean = text.replace(/```json|```/g, '').trim()
   let plan
   try {
@@ -370,18 +366,14 @@ Existing habits (id, name): ${JSON.stringify(habitList)}
 Limits: ${MAX_SUGGEST_GOALS} goals, ${MAX_SUGGEST_TASKS} tasks, ${MAX_SUGGEST_NOTES} notes, ${MAX_SUGGEST_HABITS} habits.
 Do not duplicate: goals=${JSON.stringify(existingGoalTitles)}, tasks=${JSON.stringify(existingTaskTitles)}`
 
-  const groq = getGroqClient()
-  const completion = await groq.chat.completions.create({
-    model: 'llama-3.1-8b-instant',
-    max_tokens: 800,
-    temperature: 0.1,
+  const text = await getChatCompletion({
     messages: [
       { role: 'system', content: extractorSystem },
       { role: 'user', content: JSON.stringify({ userMessage, assistantReply }) }
-    ]
-  })
-
-  const text = completion.choices[0]?.message?.content || '{}'
+    ],
+    max_tokens: 800,
+    temperature: 0.1
+  }).catch(() => '{}')
   const parsed = parseJsonFromModel(text) || {}
 
   // Sanitize additive suggestions
@@ -594,14 +586,11 @@ router.post('/:id/message', aiLimiter, validate(sendMessageSchema), asyncHandler
     .map(m => ({ role: m.role, content: m.content }))
 
   // Primary LLM call — generates the coaching response
-  const groq = getGroqClient()
-  const completion = await groq.chat.completions.create({
-    model: 'llama-3.1-8b-instant',
+  const reply = await getChatCompletion({
+    messages: [{ role: 'system', content: systemPrompt }, ...recentMessages],
     max_tokens: 400,
-    messages: [{ role: 'system', content: systemPrompt }, ...recentMessages]
+    temperature: 0.5
   })
-
-  const reply = completion.choices[0].message.content
 
   // Update persistent memory asynchronously — fire and forget, don't block response
   updateUserMemoryFromConversation({

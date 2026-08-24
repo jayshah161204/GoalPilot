@@ -7,7 +7,7 @@ const protect = require('../middleware/auth')
 const asyncHandler = require('../utils/asyncHandler')
 const AppError = require('../utils/AppError')
 const { aiLimiter } = require('../middleware/rateLimiter')
-const { getGroqClient } = require('../utils/groqClient')
+const { getChatCompletion } = require('../utils/groqClient')
 
 router.use(protect)
 
@@ -85,15 +85,11 @@ RULES:
 FORMAT (strict):
 [{"task":"exact task name","duration":"X min","timeSlot":"9:00 AM","reason":"motivating reason mentioning context","priority":"high|medium|low","type":"task|habit|break"}]`
 
-  const groq = getGroqClient()
-  const completion = await groq.chat.completions.create({
-    model: 'llama-3.1-8b-instant',
-    max_tokens: 600,
-    temperature: 0.4,
-    messages: [{ role: 'user', content: prompt }]
+  const text = await getChatCompletion({
+    messages: [{ role: 'user', content: prompt }],
+    max_tokens: 700,
+    temperature: 0.4
   })
-
-  const text = completion.choices[0]?.message?.content?.trim() || '[]'
   const rawPlan = parsePlanArray(text)
   if (!rawPlan) throw new AppError('Could not generate daily plan. Please try again.', 502)
 

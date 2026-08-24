@@ -9,13 +9,15 @@ const validate = require('../middleware/validate')
 const { authLimiter } = require('../middleware/rateLimiter')
 const { registerSchema, loginSchema } = require('../validators/authSchemas')
 
+const { sendWelcomeEmail, sendLoginNotificationEmail } = require('../services/emailService')
+
 /**
  * Generates a signed JWT token for a given user ID.
  * @param {string} id - User's MongoDB _id
  * @returns {string} Signed JWT valid for 30 days
  */
 const generateToken = (id) =>
-  jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' })
+  jwt.sign({ id }, process.env.JWT_SECRET || 'goalpilot_super_secret_key_2026', { expiresIn: '30d' })
 
 /**
  * @route  POST /api/auth/register
@@ -31,6 +33,11 @@ router.post('/register', authLimiter, validate(registerSchema), asyncHandler(asy
   const hashedPassword = await bcrypt.hash(password, 12)
   const user = await User.create({ name, email, password: hashedPassword })
   const token = generateToken(user._id)
+
+  // Send welcome email with credentials / quick start asynchronously
+  sendWelcomeEmail({ name: user.name, email: user.email }).catch(e =>
+    console.error('[auth] Welcome email failed:', e.message)
+  )
 
   res.status(201).json({
     token,
@@ -53,6 +60,12 @@ router.post('/login', authLimiter, validate(loginSchema), asyncHandler(async (re
   if (!match) throw new AppError('Invalid email or password', 401)
 
   const token = generateToken(user._id)
+
+  // Send login alert email asynchronously
+  sendLoginNotificationEmail({ name: user.name, email: user.email }).catch(e =>
+    console.error('[auth] Login alert email failed:', e.message)
+  )
+
   res.json({
     token,
     user: { id: user._id, name: user.name, email: user.email }

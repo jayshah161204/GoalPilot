@@ -61,17 +61,15 @@ Rules:
     assistantReply
   })
 
-  const completion = await groq.chat.completions.create({
-    model: 'llama-3.1-8b-instant',
-    max_tokens: 450,
-    temperature: 0.1,
+  const { getChatCompletion } = require('./groqClient')
+  const raw = await getChatCompletion({
     messages: [
       { role: 'system', content: system },
       { role: 'user', content: payload }
-    ]
-  })
-
-  const raw = completion.choices[0]?.message?.content || '{}'
+    ],
+    max_tokens: 450,
+    temperature: 0.1
+  }).catch(() => '{}')
   const start = raw.indexOf('{')
   const end = raw.lastIndexOf('}')
   if (start < 0 || end <= start) return current

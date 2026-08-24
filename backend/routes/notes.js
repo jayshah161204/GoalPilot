@@ -6,7 +6,7 @@ const asyncHandler = require('../utils/asyncHandler')
 const AppError = require('../utils/AppError')
 const validate = require('../middleware/validate')
 const { aiLimiter } = require('../middleware/rateLimiter')
-const { getGroqClient } = require('../utils/groqClient')
+const { getChatCompletion } = require('../utils/groqClient')
 const { createNoteSchema, updateNoteSchema } = require('../validators/noteSchemas')
 
 router.use(protect)
@@ -66,17 +66,16 @@ router.post('/:id/summarize', aiLimiter, asyncHandler(async (req, res) => {
     throw new AppError('Note content is too short to summarize', 400)
   }
 
-  const groq = getGroqClient()
-  const completion = await groq.chat.completions.create({
-    model: 'llama-3.1-8b-instant',
-    max_tokens: 120,
+  const summary = await getChatCompletion({
     messages: [{
       role: 'user',
       content: `Summarize this in exactly 2 short, clear sentences:\n\n${note.content}`
-    }]
+    }],
+    max_tokens: 120,
+    temperature: 0.3
   })
 
-  note.summary = completion.choices[0].message.content.trim()
+  note.summary = summary
   await note.save()
   res.json(note)
 }))
