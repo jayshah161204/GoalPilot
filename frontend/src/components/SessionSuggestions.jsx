@@ -4,16 +4,20 @@
  * Renders a confirmation panel below AI chat messages when the assistant
  * suggests adding OR modifying items.
  *
- * Supports two modes:
- *  1. ADDITIVE (default): Create new goals, tasks, notes, habits, daily plan items.
- *  2. ACTIONS: Delete or complete existing items (always requires explicit confirm).
- *
- * Nothing is saved or deleted until the user clicks "Confirm" on the specific panel.
- * This gives the user full control — the AI is an agent that *proposes*, not acts.
+ * Supports:
+ *  1. ADDITIVE: Create new goals, tasks, notes, habits, daily plan items.
+ *     Allows inline customization of priority (Low/Medium/High) and due date / deadline.
+ *  2. ACTIONS: Delete or complete existing items (requires explicit confirm).
  */
 import { useState, useEffect } from 'react'
-import { FiCheckSquare, FiTarget, FiX, FiFileText, FiActivity, FiCalendar, FiTrash2, FiCheck, FiAlertTriangle } from 'react-icons/fi'
-import { createGoal, createTask, createNote, createHabit, getGoals, deleteTask, updateTask, deleteGoal, deleteNote, deleteHabit } from '../api'
+import {
+  FiCheckSquare, FiTarget, FiX, FiFileText, FiActivity, FiCalendar,
+  FiTrash2, FiCheck, FiAlertTriangle, FiClock
+} from 'react-icons/fi'
+import {
+  createGoal, createTask, createNote, createHabit, getGoals,
+  deleteTask, updateTask, deleteGoal, deleteNote, deleteHabit
+} from '../api'
 import { APP_EVENTS } from '../utils/constants'
 
 const EMPTY = []
@@ -34,40 +38,20 @@ export function hasSessionSuggestions (suggestions) {
 /** Small labelled section header */
 function Section ({ icon: Icon, label, iconColor, children }) {
   return (
-    <div>
-      <p style={{ fontSize: '0.72rem', fontWeight: 600, color: iconColor || 'var(--accent)', margin: '0 0 0.35rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-        <Icon size={12} /> {label}
+    <div style={{ marginBottom: '0.65rem' }}>
+      <p style={{ fontSize: '0.74rem', fontWeight: 700, color: iconColor || 'var(--accent)', margin: '0 0 0.4rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Icon size={13} /> {label}
       </p>
       {children}
     </div>
   )
 }
 
-/** Checkbox list for additive suggestions */
-function CheckboxList ({ items, picked, onToggle, renderLabel }) {
-  return (
-    <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-      {items.map((item, i) => (
-        <li key={i} style={{ marginBottom: 6 }}>
-          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-            <input type="checkbox" checked={picked.has(i)} onChange={() => onToggle(i)} style={{ marginTop: 3 }} />
-            <span>{renderLabel(item)}</span>
-          </label>
-        </li>
-      ))}
-    </ul>
-  )
-}
-
 /**
  * ActionConfirmCard — renders a single proposed destructive action (delete/complete)
- * with its own Confirm / Skip buttons.
- *
- * @param {{ action, onConfirm, onSkip }} props
  */
 function ActionConfirmCard ({ action, onConfirm, onSkip, busy }) {
   const isDelete = action.type.startsWith('delete_')
-  const isComplete = action.type === 'complete_task'
 
   const label = (() => {
     if (action.type === 'delete_task') return `Delete task: "${action.taskTitle}"`
@@ -147,40 +131,64 @@ function ActionConfirmCard ({ action, onConfirm, onSkip, busy }) {
   )
 }
 
-/**
- * Main SessionSuggestions component.
- * Rendered inside the chat/session page below each AI message that produced suggestions.
- */
 export default function SessionSuggestions ({ suggestions, onDismiss, onApplied }) {
   const goals = suggestions?.goals ?? EMPTY
-  const tasks = suggestions?.tasks ?? EMPTY
+  const rawTasks = suggestions?.tasks ?? EMPTY
   const notes = suggestions?.notes ?? EMPTY
   const habits = suggestions?.habits ?? EMPTY
-  const planTasks = suggestions?.planTasks ?? EMPTY
+  const rawPlanTasks = suggestions?.planTasks ?? EMPTY
   const rawActions = suggestions?.actions ?? EMPTY
 
+  // Editable task state (priority & deadline customization)
+  const [tasks, setTasks] = useState([])
+  const [planTasks, setPlanTasks] = useState([])
+  const [editableGoals, setEditableGoals] = useState([])
+
   const [pickG, setPickG] = useState(() => new Set(goals.map((_, i) => i)))
-  const [pickT, setPickT] = useState(() => new Set(tasks.map((_, i) => i)))
+  const [pickT, setPickT] = useState(() => new Set(rawTasks.map((_, i) => i)))
   const [pickN, setPickN] = useState(() => new Set(notes.map((_, i) => i)))
   const [pickH, setPickH] = useState(() => new Set(habits.map((_, i) => i)))
-  const [pickP, setPickP] = useState(() => new Set(planTasks.map((_, i) => i)))
+  const [pickP, setPickP] = useState(() => new Set(rawPlanTasks.map((_, i) => i)))
   const [skippedActions, setSkippedActions] = useState(new Set())
   const [busyAction, setBusyAction] = useState(null)
   const [busyApply, setBusyApply] = useState(false)
   const [actionError, setActionError] = useState('')
 
   useEffect(() => {
-    setPickG(new Set((suggestions?.goals ?? EMPTY).map((_, i) => i)))
-    setPickT(new Set((suggestions?.tasks ?? EMPTY).map((_, i) => i)))
+    const initializedTasks = (suggestions?.tasks ?? EMPTY).map(t => ({
+      title: t.title || '',
+      priority: ['low', 'medium', 'high'].includes(t.priority) ? t.priority : 'medium',
+      dueDate: t.dueDate ? t.dueDate.slice(0, 10) : '',
+      goalTitle: t.goalTitle || '',
+      description: t.description || ''
+    }))
+    setTasks(initializedTasks)
+    setPickT(new Set(initializedTasks.map((_, i) => i)))
+
+    const initializedPlan = (suggestions?.planTasks ?? EMPTY).map(p => ({
+      title: p.title || '',
+      priority: ['low', 'medium', 'high'].includes(p.priority) ? p.priority : 'medium',
+      dueDate: p.dueDate ? p.dueDate.slice(0, 10) : new Date().toISOString().slice(0, 10),
+      description: p.description || ''
+    }))
+    setPlanTasks(initializedPlan)
+    setPickP(new Set(initializedPlan.map((_, i) => i)))
+
+    const initializedGoals = (suggestions?.goals ?? EMPTY).map(g => ({
+      title: g.title || '',
+      deadline: g.deadline ? g.deadline.slice(0, 10) : ''
+    }))
+    setEditableGoals(initializedGoals)
+    setPickG(new Set(initializedGoals.map((_, i) => i)))
+
     setPickN(new Set((suggestions?.notes ?? EMPTY).map((_, i) => i)))
     setPickH(new Set((suggestions?.habits ?? EMPTY).map((_, i) => i)))
-    setPickP(new Set((suggestions?.planTasks ?? EMPTY).map((_, i) => i)))
     setSkippedActions(new Set())
     setActionError('')
   }, [suggestions])
 
   const hasAdditive =
-    goals.length > 0 ||
+    editableGoals.length > 0 ||
     tasks.length > 0 ||
     notes.length > 0 ||
     habits.length > 0 ||
@@ -205,6 +213,30 @@ export default function SessionSuggestions ({ suggestions, onDismiss, onApplied 
       if (n.has(i)) n.delete(i)
       else n.add(i)
       return n
+    })
+  }
+
+  const updateTaskItem = (index, field, val) => {
+    setTasks(prev => {
+      const copy = [...prev]
+      copy[index] = { ...copy[index], [field]: val }
+      return copy
+    })
+  }
+
+  const updatePlanTaskItem = (index, field, val) => {
+    setPlanTasks(prev => {
+      const copy = [...prev]
+      copy[index] = { ...copy[index], [field]: val }
+      return copy
+    })
+  }
+
+  const updateGoalDeadline = (index, val) => {
+    setEditableGoals(prev => {
+      const copy = [...prev]
+      copy[index] = { ...copy[index], deadline: val }
+      return copy
     })
   }
 
@@ -239,9 +271,9 @@ export default function SessionSuggestions ({ suggestions, onDismiss, onApplied 
     }
   }
 
-  /** Add all checked additive suggestions */
+  /** Add all checked additive suggestions with customized priority and deadlines */
   const handleApply = async () => {
-    const selectedGoals = goals.filter((_, i) => pickG.has(i))
+    const selectedGoals = editableGoals.filter((_, i) => pickG.has(i))
     const selectedTasks = tasks.filter((_, i) => pickT.has(i))
     const selectedNotes = notes.filter((_, i) => pickN.has(i))
     const selectedHabits = habits.filter((_, i) => pickH.has(i))
@@ -308,9 +340,6 @@ export default function SessionSuggestions ({ suggestions, onDismiss, onApplied 
     }
   }
 
-  // Visible (non-skipped) actions — keep original indices for skip/confirm state
-  const hasAdditiveItems = hasAdditive
-
   if (!hasSessionSuggestions(suggestions)) return null
 
   return (
@@ -321,11 +350,11 @@ export default function SessionSuggestions ({ suggestions, onDismiss, onApplied 
       padding: '0.85rem 1rem',
       marginTop: '0.25rem',
       marginBottom: '0.5rem',
-      boxShadow: '0 2px 12px rgba(99,102,241,0.12)'
+      boxShadow: '0 4px 16px rgba(99,102,241,0.12)'
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
         <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: 'var(--accent-strong)' }}>
-          GoalPilot suggests…
+          ⚡ Quick AI Task & Goal Suggestions
         </p>
         <button type="button" onClick={onDismiss} aria-label="Dismiss suggestions"
           style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 4, borderRadius: 8, color: 'var(--text-subtle)' }}>
@@ -333,9 +362,9 @@ export default function SessionSuggestions ({ suggestions, onDismiss, onApplied 
         </button>
       </div>
 
-      {/* ── Destructive Actions (delete/complete) — each has its own confirm button ── */}
+      {/* ── Destructive Actions (delete/complete) ── */}
       {visibleActionEntries.length > 0 && (
-        <div style={{ marginBottom: hasAdditiveItems ? '0.75rem' : 0 }}>
+        <div style={{ marginBottom: hasAdditive ? '0.75rem' : 0 }}>
           <Section icon={FiAlertTriangle} label="Actions (confirm to apply)" iconColor="var(--orange)">
             {visibleActionEntries.map(({ action, idx }) => (
               <ActionConfirmCard
@@ -350,88 +379,251 @@ export default function SessionSuggestions ({ suggestions, onDismiss, onApplied 
         </div>
       )}
 
-      {/* ── Additive suggestions — one batch confirm ── */}
-      {hasAdditiveItems && (
+      {/* ── Additive suggestions ── */}
+      {hasAdditive && (
         <>
-          <p style={{ margin: '0 0 0.6rem', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
-            Nothing is saved until you click "Add selected". Uncheck anything you don't want.
+          <p style={{ margin: '0 0 0.65rem', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
+            Select items to add. You can customize the <strong>priority</strong> and <strong>deadline</strong> for each task before adding:
           </p>
 
-          {goals.length > 0 && (
-            <div style={{ marginBottom: '0.55rem' }}>
-              <Section icon={FiTarget} label="Goals">
-                <CheckboxList items={goals} picked={pickG} onToggle={i => toggle(setPickG, i)}
-                  renderLabel={g => (
-                    <>
-                      {g.title}
-                      {g.deadline && <span style={{ color: 'var(--text-subtle)', fontSize: '0.72rem' }}> — due {g.deadline}</span>}
-                    </>
-                  )} />
-              </Section>
-            </div>
-          )}
-
+          {/* ── Tasks with customizable priority and deadline ── */}
           {tasks.length > 0 && (
-            <div style={{ marginBottom: '0.55rem' }}>
-              <Section icon={FiCheckSquare} label="Tasks">
-                <CheckboxList items={tasks} picked={pickT} onToggle={i => toggle(setPickT, i)}
-                  renderLabel={t => (
-                    <>
-                      {t.title}
-                      <span style={{ color: 'var(--text-subtle)', fontSize: '0.72rem' }}>
-                        {t.priority && t.priority !== 'medium' ? ` — ${t.priority}` : ''}
-                        {t.dueDate ? ` — due ${t.dueDate}` : ''}
-                        {t.goalTitle ? ` — goal: ${t.goalTitle}` : ''}
-                      </span>
-                    </>
-                  )} />
-              </Section>
-            </div>
+            <Section icon={FiCheckSquare} label="Suggested Tasks">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {tasks.map((task, i) => {
+                  const isChecked = pickT.has(i)
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        background: isChecked ? 'var(--surface)' : 'var(--surface-soft)',
+                        border: `1px solid ${isChecked ? 'var(--accent-border)' : 'var(--border)'}`,
+                        borderRadius: '10px',
+                        padding: '0.6rem 0.75rem',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: isChecked ? 6 : 0 }}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggle(setPickT, i)}
+                          style={{ marginTop: 3, cursor: 'pointer' }}
+                        />
+                        <span style={{ fontSize: '0.82rem', fontWeight: 600, color: isChecked ? 'var(--text-strong)' : 'var(--text-muted)', flex: 1 }}>
+                          {task.title}
+                          {task.goalTitle && (
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-subtle)', fontWeight: 400, marginLeft: 4 }}>
+                              (Goal: {task.goalTitle})
+                            </span>
+                          )}
+                        </span>
+                      </div>
+
+                      {isChecked && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingLeft: '22px', flexWrap: 'wrap' }}>
+                          {/* Priority Selector */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Priority:</span>
+                            <select
+                              value={task.priority}
+                              onChange={(e) => updateTaskItem(i, 'priority', e.target.value)}
+                              style={{
+                                fontSize: '0.72rem',
+                                padding: '2px 6px',
+                                borderRadius: '6px',
+                                border: '1px solid var(--border)',
+                                background: 'var(--surface-muted)',
+                                color: task.priority === 'high' ? 'var(--danger)' : task.priority === 'medium' ? 'var(--warning)' : 'var(--success)',
+                                fontWeight: 700,
+                                outline: 'none',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <option value="high">High</option>
+                              <option value="medium">Medium</option>
+                              <option value="low">Low</option>
+                            </select>
+                          </div>
+
+                          {/* Deadline / Due Date Picker */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <FiClock size={11} color="var(--text-subtle)" />
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Due:</span>
+                            <input
+                              type="date"
+                              value={task.dueDate}
+                              onChange={(e) => updateTaskItem(i, 'dueDate', e.target.value)}
+                              style={{
+                                fontSize: '0.72rem',
+                                padding: '2px 6px',
+                                borderRadius: '6px',
+                                border: '1px solid var(--border)',
+                                background: 'var(--surface-muted)',
+                                color: 'var(--text-primary)',
+                                outline: 'none',
+                                cursor: 'pointer'
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </Section>
           )}
 
-          {notes.length > 0 && (
-            <div style={{ marginBottom: '0.55rem' }}>
-              <Section icon={FiFileText} label="Notes">
-                <CheckboxList items={notes} picked={pickN} onToggle={i => toggle(setPickN, i)}
-                  renderLabel={n => (
-                    <>
-                      {n.title}
-                      <span style={{ color: 'var(--text-subtle)', fontSize: '0.72rem', display: 'block', marginTop: 2 }}>
-                        {n.content.length > 80 ? `${n.content.slice(0, 80)}…` : n.content}
-                      </span>
-                    </>
-                  )} />
-              </Section>
-            </div>
-          )}
-
-          {habits.length > 0 && (
-            <div style={{ marginBottom: '0.55rem' }}>
-              <Section icon={FiActivity} label="Habits">
-                <CheckboxList items={habits} picked={pickH} onToggle={i => toggle(setPickH, i)}
-                  renderLabel={h => h.name} />
-              </Section>
-            </div>
-          )}
-
+          {/* ── Daily Plan Tasks ── */}
           {planTasks.length > 0 && (
-            <div style={{ marginBottom: '0.65rem' }}>
-              <Section icon={FiCalendar} label="Daily plan (add as today's tasks)">
-                <CheckboxList items={planTasks} picked={pickP} onToggle={i => toggle(setPickP, i)}
-                  renderLabel={p => (
-                    <>
-                      {p.title}
-                      <span style={{ color: 'var(--text-subtle)', fontSize: '0.72rem' }}>
-                        {p.priority && p.priority !== 'medium' ? ` — ${p.priority}` : ''}
-                        {p.description ? ` — ${p.description}` : ''}
-                      </span>
-                    </>
-                  )} />
-              </Section>
-            </div>
+            <Section icon={FiCalendar} label="Daily Plan Tasks">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {planTasks.map((plan, i) => {
+                  const isChecked = pickP.has(i)
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        background: isChecked ? 'var(--surface)' : 'var(--surface-soft)',
+                        border: `1px solid ${isChecked ? 'var(--accent-border)' : 'var(--border)'}`,
+                        borderRadius: '10px',
+                        padding: '0.6rem 0.75rem',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: isChecked ? 6 : 0 }}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggle(setPickP, i)}
+                          style={{ marginTop: 3, cursor: 'pointer' }}
+                        />
+                        <span style={{ fontSize: '0.82rem', fontWeight: 600, color: isChecked ? 'var(--text-strong)' : 'var(--text-muted)', flex: 1 }}>
+                          {plan.title}
+                          {plan.description && (
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-subtle)', fontWeight: 400, display: 'block', marginTop: 2 }}>
+                              {plan.description}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+
+                      {isChecked && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingLeft: '22px', flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Priority:</span>
+                            <select
+                              value={plan.priority}
+                              onChange={(e) => updatePlanTaskItem(i, 'priority', e.target.value)}
+                              style={{
+                                fontSize: '0.72rem',
+                                padding: '2px 6px',
+                                borderRadius: '6px',
+                                border: '1px solid var(--border)',
+                                background: 'var(--surface-muted)',
+                                color: plan.priority === 'high' ? 'var(--danger)' : plan.priority === 'medium' ? 'var(--warning)' : 'var(--success)',
+                                fontWeight: 700,
+                                outline: 'none',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <option value="high">High</option>
+                              <option value="medium">Medium</option>
+                              <option value="low">Low</option>
+                            </select>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <FiClock size={11} color="var(--text-subtle)" />
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Due:</span>
+                            <input
+                              type="date"
+                              value={plan.dueDate}
+                              onChange={(e) => updatePlanTaskItem(i, 'dueDate', e.target.value)}
+                              style={{
+                                fontSize: '0.72rem',
+                                padding: '2px 6px',
+                                borderRadius: '6px',
+                                border: '1px solid var(--border)',
+                                background: 'var(--surface-muted)',
+                                color: 'var(--text-primary)',
+                                outline: 'none',
+                                cursor: 'pointer'
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </Section>
           )}
 
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          {/* ── Goals ── */}
+          {editableGoals.length > 0 && (
+            <Section icon={FiTarget} label="Goals">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {editableGoals.map((g, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', flex: 1 }}>
+                      <input type="checkbox" checked={pickG.has(i)} onChange={() => toggle(setPickG, i)} />
+                      <span style={{ fontWeight: 600 }}>{g.title}</span>
+                    </label>
+                    {pickG.has(i) && (
+                      <input
+                        type="date"
+                        value={g.deadline}
+                        onChange={(e) => updateGoalDeadline(i, e.target.value)}
+                        style={{ fontSize: '0.72rem', padding: '2px 6px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface-muted)', color: 'var(--text-primary)' }}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {/* ── Notes ── */}
+          {notes.length > 0 && (
+            <Section icon={FiFileText} label="Notes">
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                {notes.map((n, i) => (
+                  <li key={i} style={{ marginBottom: 6 }}>
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      <input type="checkbox" checked={pickN.has(i)} onChange={() => toggle(setPickN, i)} style={{ marginTop: 3 }} />
+                      <div>
+                        <span style={{ fontWeight: 600 }}>{n.title}</span>
+                        <span style={{ color: 'var(--text-subtle)', fontSize: '0.72rem', display: 'block', marginTop: 2 }}>
+                          {n.content?.length > 80 ? `${n.content.slice(0, 80)}…` : n.content}
+                        </span>
+                      </div>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
+          {/* ── Habits ── */}
+          {habits.length > 0 && (
+            <Section icon={FiActivity} label="Habits">
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                {habits.map((h, i) => (
+                  <li key={i} style={{ marginBottom: 6 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      <input type="checkbox" checked={pickH.has(i)} onChange={() => toggle(setPickH, i)} />
+                      <span style={{ fontWeight: 600 }}>{h.name}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: '0.75rem' }}>
             <button type="button" onClick={onDismiss} disabled={busyApply}
               style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text-muted)' }}>
               Dismiss
