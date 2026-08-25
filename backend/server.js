@@ -79,19 +79,37 @@ if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'))
 }
 
-// ─── Database Connection & Serverless Helper ──────────────────────────────────
-let isConnected = false
+// ─── Database Connection & Serverless Global Caching ──────────────────────────
+let cached = global.mongoose
+
+if (!cached) {
+  cached = global.mongoose = { conn: null, promise: null }
+}
 
 const connectDB = async () => {
-  if (isConnected && mongoose.connection.readyState === 1) {
-    return
+  if (cached.conn && mongoose.connection.readyState === 1) {
+    return cached.conn
   }
-  const uri = getMongoURI()
-  await mongoose.connect(uri, {
-    serverSelectionTimeoutMS: 8000,
-    socketTimeoutMS: 30000
-  })
-  isConnected = true
+
+  if (!cached.promise) {
+    const uri = getMongoURI()
+    cached.promise = mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 20000,
+      maxPoolSize: 10,
+      minPoolSize: 1,
+      bufferCommands: false
+    }).then((m) => m)
+  }
+
+  try {
+    cached.conn = await cached.promise
+  } catch (e) {
+    cached.promise = null
+    throw e
+  }
+
+  return cached.conn
 }
 
 // Ensure database connection before handling API routes

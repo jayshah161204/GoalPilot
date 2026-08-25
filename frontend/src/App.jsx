@@ -37,8 +37,15 @@ const bottomNavTabs = [
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
-  const [user, setUser] = useState(null)
-  const [checking, setChecking] = useState(true)
+  const [user, setUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('user')
+      const token = localStorage.getItem('token')
+      return saved && token ? JSON.parse(saved) : null
+    } catch {
+      return null
+    }
+  })
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebarCollapsed') === 'true')
   const [theme, setTheme] = useState(() => {
@@ -53,13 +60,6 @@ export default function App() {
     document.documentElement.style.colorScheme = theme
     localStorage.setItem('theme', theme)
   }, [theme])
-
-  useEffect(() => {
-    const saved = localStorage.getItem('user')
-    const token = localStorage.getItem('token')
-    if (saved && token) setUser(JSON.parse(saved))
-    setChecking(false)
-  }, [])
 
   const handleAuth = (userData) => setUser(userData)
 
@@ -90,7 +90,6 @@ export default function App() {
     </button>
   )
 
-  if (checking) return null
   if (!user) return <><div className="auth-theme-toggle">{themeToggle}</div><Auth onAuth={handleAuth} /></>
 
   return (
