@@ -527,6 +527,8 @@ router.get('/', asyncHandler(async (req, res) => {
   const sessions = await Session.find({ userId: req.user._id })
     .select('title createdAt updatedAt')
     .sort({ updatedAt: -1 })
+    .limit(30)
+    .lean()
   res.json(sessions)
 }))
 
@@ -536,7 +538,7 @@ router.get('/', asyncHandler(async (req, res) => {
  * @access Private
  */
 router.get('/:id', asyncHandler(async (req, res) => {
-  const session = await Session.findOne({ _id: req.params.id, userId: req.user._id })
+  const session = await Session.findOne({ _id: req.params.id, userId: req.user._id }).lean()
   if (!session) throw new AppError('Session not found', 404)
   res.json(session)
 }))

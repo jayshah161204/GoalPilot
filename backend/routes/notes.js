@@ -19,6 +19,7 @@ router.use(protect)
 router.get('/', asyncHandler(async (req, res) => {
   const notes = await Note.find({ userId: req.user._id })
     .sort({ pinned: -1, createdAt: 1 })
+    .lean()
   res.json(notes)
 }))
 

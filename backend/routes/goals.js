@@ -16,7 +16,7 @@ router.use(protect)
  * @access Private
  */
 router.get('/', asyncHandler(async (req, res) => {
-  const goals = await Goal.find({ userId: req.user._id }).sort({ createdAt: 1 })
+  const goals = await Goal.find({ userId: req.user._id }).sort({ createdAt: 1 }).lean()
   res.json(goals)
 }))
 

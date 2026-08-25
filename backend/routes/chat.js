@@ -107,7 +107,10 @@ Always reference actual task and goal names from this data. Never give generic a
  * @access Private
  */
 router.get('/history', asyncHandler(async (req, res) => {
-  const history = await Chat.find({ userId: req.user._id }).sort({ createdAt: 1 })
+  const history = await Chat.find({ userId: req.user._id })
+    .sort({ createdAt: 1 })
+    .limit(60)
+    .lean()
   res.json(history)
 }))
 

@@ -19,7 +19,7 @@ router.use(protect)
  */
 const updateGoalProgress = async (goalId, userId) => {
   if (!goalId) return
-  const tasks = await Task.find({ goalId, userId })
+  const tasks = await Task.find({ goalId, userId }).select('completed').lean()
   if (tasks.length === 0) return
   const completed = tasks.filter(t => t.completed).length
   const progress = Math.round((completed / tasks.length) * 100)
@@ -32,7 +32,7 @@ const updateGoalProgress = async (goalId, userId) => {
  * @access Private
  */
 router.get('/', asyncHandler(async (req, res) => {
-  const tasks = await Task.find({ userId: req.user._id }).sort({ createdAt: 1 })
+  const tasks = await Task.find({ userId: req.user._id }).sort({ createdAt: 1 }).lean()
   res.json(tasks)
 }))
 
