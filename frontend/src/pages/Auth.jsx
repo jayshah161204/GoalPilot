@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiZap, FiMail, FiLock, FiUser, FiArrowRight, FiX } from 'react-icons/fi'
 import { login, register, googleLogin } from '../api'
@@ -25,6 +25,28 @@ const GoogleIcon = () => (
   </svg>
 )
 
+/**
+ * Parses JWT payload without external library.
+ *
+ * @param {string} token - Google ID Token
+ * @returns {object|null}
+ */
+const parseJwt = (token) => {
+  try {
+    const base64Url = token.split('.')[1]
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    )
+    return JSON.parse(jsonPayload)
+  } catch (_) {
+    return null
+  }
+}
+
 export default function Auth({ onAuth }) {
   const [isLogin, setIsLogin] = useState(true)
   const [form, setForm] = useState({ name: '', email: '', password: '' })
@@ -33,6 +55,57 @@ export default function Auth({ onAuth }) {
   const [showGoogleModal, setShowGoogleModal] = useState(false)
   const [googleForm, setGoogleForm] = useState({ name: '', email: '' })
   const [googleLoading, setGoogleLoading] = useState(false)
+  const googleButtonRef = useRef(null)
+
+  // Initialize Google Identity Services (OAuth / One Tap)
+  useEffect(() => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '1046187283427-goalpilot.apps.googleusercontent.com'
+
+    const handleGoogleCallback = async (response) => {
+      if (!response.credential) return
+      const payload = parseJwt(response.credential)
+      if (!payload || !payload.email) return
+
+      setGoogleLoading(true)
+      try {
+        const { data } = await googleLogin({
+          name: payload.name || payload.given_name || payload.email.split('@')[0],
+          email: payload.email,
+          googleId: payload.sub,
+          avatar: payload.picture
+        })
+        localStorage.setItem('token', data.token)
+        localStorage.setItem('user', JSON.stringify(data.user))
+        onAuth(data.user)
+      } catch (err) {
+        setError(getApiErrorMessage(err))
+      }
+      setGoogleLoading(false)
+    }
+
+    if (window.google?.accounts?.id) {
+      try {
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: handleGoogleCallback,
+          auto_select: false,
+          cancel_on_tap_outside: true
+        })
+
+        // Render hidden official Google button if needed for native popup trigger
+        if (googleButtonRef.current) {
+          window.google.accounts.id.renderButton(googleButtonRef.current, {
+            theme: 'outline',
+            size: 'large',
+            width: 350,
+            text: 'continue_with'
+          })
+        }
+      } catch (err) {
+        console.warn('Google GSI init notice:', err.message)
+      }
+    }
+  }, [onAuth])
 
   const handle = async () => {
     setError('')
@@ -48,6 +121,23 @@ export default function Auth({ onAuth }) {
       setError(getApiErrorMessage(err))
     }
     setLoading(false)
+  }
+
+  const triggerGoogleOAuth = () => {
+    setError('')
+    if (window.google?.accounts?.id) {
+      try {
+        // Triggers Google Account One-Tap / OAuth prompt
+        window.google.accounts.id.prompt((notification) => {
+          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            // If One Tap was dismissed or blocked, open direct Google dialog
+            setShowGoogleModal(true)
+          }
+        })
+        return
+      } catch (_) {}
+    }
+    setShowGoogleModal(true)
   }
 
   const handleGoogleSubmit = async (e) => {
@@ -105,20 +195,24 @@ export default function Auth({ onAuth }) {
           {/* Google Sign In Button */}
           <button
             type="button"
-            onClick={() => setShowGoogleModal(true)}
+            onClick={triggerGoogleOAuth}
+            disabled={googleLoading}
             style={{
               width: '100%', padding: '0.75rem 1rem', background: 'var(--surface-muted)',
               border: '1.5px solid var(--border)', borderRadius: '12px', color: 'var(--text-primary)',
-              fontSize: '0.88rem', fontWeight: 600, fontFamily: 'Plus Jakarta Sans', cursor: 'pointer',
+              fontSize: '0.88rem', fontWeight: 600, fontFamily: 'Plus Jakarta Sans', cursor: googleLoading ? 'wait' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.65rem',
               transition: 'all 0.18s ease', marginBottom: '1.25rem'
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-soft)'; e.currentTarget.style.borderColor = 'var(--border-strong, var(--accent-border))' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-soft)'; e.currentTarget.style.borderColor = 'var(--accent-border)' }}
             onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface-muted)'; e.currentTarget.style.borderColor = 'var(--border)' }}
           >
             <GoogleIcon />
-            <span>Continue with Google</span>
+            <span>{googleLoading ? 'Signing in with Google...' : 'Continue with Google'}</span>
           </button>
+
+          {/* Hidden container for GSI button rendering */}
+          <div ref={googleButtonRef} style={{ display: 'none' }} />
 
           {/* Divider */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
@@ -235,10 +329,10 @@ export default function Auth({ onAuth }) {
         </p>
       </motion.div>
 
-      {/* Google Sign In Modal */}
+      {/* Google Direct Sign In Dialog */}
       {showGoogleModal && (
         <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.6)',
+          position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.65)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           zIndex: 2000, padding: '1rem', backdropFilter: 'blur(4px)'
         }}>
@@ -266,7 +360,7 @@ export default function Auth({ onAuth }) {
             </div>
 
             <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '1.25rem', lineHeight: 1.5, fontFamily: 'Plus Jakarta Sans' }}>
-              Enter your Google Account email to continue. Your GoalPilot workspace will sync instantly.
+              Choose or enter your Google Account email to continue. Your workspace will synchronize instantly.
             </p>
 
             <form onSubmit={handleGoogleSubmit}>
@@ -312,7 +406,7 @@ export default function Auth({ onAuth }) {
                     cursor: googleLoading ? 'not-allowed' : 'pointer', opacity: googleLoading ? 0.7 : 1
                   }}
                 >
-                  {googleLoading ? 'Connecting...' : 'Continue to GoalPilot'}
+                  {googleLoading ? 'Authenticating...' : 'Sign In with Google'}
                 </button>
               </div>
             </form>
