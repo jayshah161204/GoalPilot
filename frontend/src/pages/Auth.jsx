@@ -1,8 +1,12 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiZap, FiMail, FiLock, FiUser, FiArrowRight, FiX } from 'react-icons/fi'
 import { login, register, googleLogin } from '../api'
 import { getApiErrorMessage } from '../utils/apiError'
+
+const GOOGLE_CLIENT_ID =
+  import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+  '373877893519-i37homfu264v18e7bjfj8tafpa4modl5.apps.googleusercontent.com'
 
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
@@ -55,13 +59,10 @@ export default function Auth({ onAuth }) {
   const [showGoogleModal, setShowGoogleModal] = useState(false)
   const [googleForm, setGoogleForm] = useState({ name: '', email: '' })
   const [googleLoading, setGoogleLoading] = useState(false)
-  const googleButtonRef = useRef(null)
 
-  // Initialize Google Identity Services (OAuth / One Tap)
+  // Initialize Google Identity Services (One Tap)
   useEffect(() => {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '1046187283427-goalpilot.apps.googleusercontent.com'
-
-    const handleGoogleCallback = async (response) => {
+    const handleGoogleCredential = async (response) => {
       if (!response.credential) return
       const payload = parseJwt(response.credential)
       if (!payload || !payload.email) return
@@ -86,21 +87,11 @@ export default function Auth({ onAuth }) {
     if (window.google?.accounts?.id) {
       try {
         window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: handleGoogleCallback,
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleGoogleCredential,
           auto_select: false,
           cancel_on_tap_outside: true
         })
-
-        // Render hidden official Google button if needed for native popup trigger
-        if (googleButtonRef.current) {
-          window.google.accounts.id.renderButton(googleButtonRef.current, {
-            theme: 'outline',
-            size: 'large',
-            width: 350,
-            text: 'continue_with'
-          })
-        }
       } catch (err) {
         console.warn('Google GSI init notice:', err.message)
       }
@@ -125,19 +116,66 @@ export default function Auth({ onAuth }) {
 
   const triggerGoogleOAuth = () => {
     setError('')
+    setGoogleLoading(true)
+
+    // Option 1: Modern Google OAuth 2.0 Token Client (Popup Account Chooser)
+    if (window.google?.accounts?.oauth2) {
+      try {
+        const tokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CLIENT_ID,
+          scope: 'email profile openid',
+          callback: async (tokenResponse) => {
+            if (tokenResponse?.access_token) {
+              try {
+                const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
+                })
+                const profile = await res.json()
+                if (profile?.email) {
+                  const { data } = await googleLogin({
+                    name: profile.name || profile.email.split('@')[0],
+                    email: profile.email,
+                    googleId: profile.sub,
+                    avatar: profile.picture
+                  })
+                  localStorage.setItem('token', data.token)
+                  localStorage.setItem('user', JSON.stringify(data.user))
+                  onAuth(data.user)
+                  return
+                }
+              } catch (err) {
+                setError(getApiErrorMessage(err))
+              }
+            }
+            setGoogleLoading(false)
+          },
+          error_callback: () => {
+            setGoogleLoading(false)
+          }
+        })
+        tokenClient.requestAccessToken({ prompt: 'select_account' })
+        return
+      } catch (err) {
+        console.warn('OAuth2 client prompt fallback:', err)
+      }
+    }
+
+    // Option 2: Google One Tap prompt
     if (window.google?.accounts?.id) {
       try {
-        // Triggers Google Account One-Tap / OAuth prompt
         window.google.accounts.id.prompt((notification) => {
           if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            // If One Tap was dismissed or blocked, open direct Google dialog
             setShowGoogleModal(true)
+            setGoogleLoading(false)
           }
         })
         return
       } catch (_) {}
     }
+
+    // Fallback: Direct Google sign in dialog
     setShowGoogleModal(true)
+    setGoogleLoading(false)
   }
 
   const handleGoogleSubmit = async (e) => {
@@ -208,11 +246,8 @@ export default function Auth({ onAuth }) {
             onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface-muted)'; e.currentTarget.style.borderColor = 'var(--border)' }}
           >
             <GoogleIcon />
-            <span>{googleLoading ? 'Signing in with Google...' : 'Continue with Google'}</span>
+            <span>{googleLoading ? 'Connecting with Google...' : 'Continue with Google'}</span>
           </button>
-
-          {/* Hidden container for GSI button rendering */}
-          <div ref={googleButtonRef} style={{ display: 'none' }} />
 
           {/* Divider */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
@@ -329,7 +364,7 @@ export default function Auth({ onAuth }) {
         </p>
       </motion.div>
 
-      {/* Google Direct Sign In Dialog */}
+      {/* Google Direct Sign In Dialog Fallback */}
       {showGoogleModal && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.65)',
