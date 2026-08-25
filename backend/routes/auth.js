@@ -73,6 +73,42 @@ router.post('/login', authLimiter, validate(loginSchema), asyncHandler(async (re
 }))
 
 /**
+ * @route  POST /api/auth/google
+ * @desc   Authenticate or register user via Google
+ * @access Public
+ */
+router.post('/google', authLimiter, asyncHandler(async (req, res) => {
+  const { name, email } = req.body
+  if (!email || typeof email !== 'string') throw new AppError('Valid email is required', 400)
+
+  const normalizedEmail = email.toLowerCase().trim()
+  let user = await User.findOne({ email: normalizedEmail })
+
+  if (!user) {
+    const randomPassword = await bcrypt.hash(Math.random().toString(36).slice(-8) + 'Gg1!@#', 10)
+    user = await User.create({
+      name: name?.trim() || normalizedEmail.split('@')[0],
+      email: normalizedEmail,
+      password: randomPassword
+    })
+
+    sendWelcomeEmail({ name: user.name, email: user.email }).catch(e =>
+      console.error('[auth] Welcome email failed:', e.message)
+    )
+  } else {
+    sendLoginNotificationEmail({ name: user.name, email: user.email }).catch(e =>
+      console.error('[auth] Login alert email failed:', e.message)
+    )
+  }
+
+  const token = generateToken(user._id)
+  res.json({
+    token,
+    user: { id: user._id, name: user.name, email: user.email }
+  })
+}))
+
+/**
  * @route  GET /api/auth/me
  * @desc   Get the currently authenticated user's profile
  * @access Private (uses shared auth middleware via token header)

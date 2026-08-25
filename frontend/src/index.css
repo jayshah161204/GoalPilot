@@ -426,7 +426,19 @@ input[type="range"]::-webkit-slider-thumb {
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-/* ─── Responsive & Mobile Optimizations ─────────────────────────────────────── */
+/* ─── Responsive & Mobile UI Controls ───────────────────────────────────────── */
+.mobile-header {
+  display: none;
+}
+
+.mobile-bottom-nav {
+  display: none;
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
 @media (max-width: 768px) {
   body {
     height: auto;
