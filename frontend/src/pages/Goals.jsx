@@ -188,7 +188,7 @@ export default function Goals() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
             >
-              <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'flex-start' }}>
+              <div className="goal-card-layout">
                 <div style={{ flexShrink: 0 }}>
                   <CircularRing progress={goal.progress} completed={goal.completed} />
                 </div>

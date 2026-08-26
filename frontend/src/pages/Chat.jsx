@@ -86,7 +86,7 @@ export default function Chat() {
   }
 
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 4rem)', gap: '1rem' }}>
+    <div className="chat-layout-container">
       {fetchError && (
         <div style={{ position: 'absolute', top: '1rem', left: '50%', transform: 'translateX(-50%)', background: 'var(--danger-soft)', border: '1px solid var(--danger-border)', borderRadius: '12px', padding: '0.75rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem', zIndex: 10 }}>
           <p style={{ color: 'var(--danger)', fontSize: '0.82rem', fontWeight: 600 }}>{fetchError}</p>
@@ -95,12 +95,7 @@ export default function Chat() {
       )}
 
       {/* Sessions Sidebar */}
-      <div style={{
-        width: '220px', flexShrink: 0,
-        background: 'var(--surface)', border: '1px solid var(--border)',
-        borderRadius: '16px', display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-      }}>
+      <div className="chat-sidebar-panel">
         <div style={{ padding: '0.875rem', borderBottom: '1px solid var(--surface-soft)' }}>
           <button className="btn btn-primary" onClick={handleNewChat} style={{ width: '100%', justifyContent: 'center', padding: '0.6rem' }}>
             <FiPlus size={14} /> New Chat

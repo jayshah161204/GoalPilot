@@ -358,7 +358,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', marginBottom: '1.25rem' }}>
+      <div className="dashboard-stats-grid">
         {[
           { label: 'Completed', value: completedTasks, icon: FiCheckSquare, color: 'var(--success)', bg: 'var(--success-soft)', border: 'var(--success-border)' },
           { label: 'Pending', value: pendingTasks, icon: FiClock, color: 'var(--warning)', bg: 'var(--warning-soft)', border: 'var(--warning-border)' },
@@ -393,7 +393,7 @@ export default function Dashboard() {
         </button>
       </motion.div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', marginBottom: '1rem' }}>
+      <div className="dashboard-cards-grid">
         <motion.div className="card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} style={{ margin: 0 }}>
           <p style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-primary)', marginBottom: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <FiZap color="var(--accent)" size={14} /> Today's Focus
@@ -483,7 +483,7 @@ export default function Dashboard() {
         </motion.div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+      <div className="dashboard-summary-grid">
         <motion.div className="card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }} style={{ margin: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
             <p style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
