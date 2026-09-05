@@ -36,8 +36,12 @@ const TaskSchema = new mongoose.Schema({
 
 // Index for the most common query: all tasks for a user, newest first
 TaskSchema.index({ userId: 1, createdAt: -1 })
+// Index for ascending task retrieval used by GET /api/tasks
+TaskSchema.index({ userId: 1, createdAt: 1 })
 // Index for filtering completed/pending tasks for a user
 TaskSchema.index({ userId: 1, completed: 1 })
+// Index for dueDate queries and reminder cron jobs
+TaskSchema.index({ userId: 1, completed: 1, dueDate: 1 })
 // Index for tasks linked to a specific goal
 TaskSchema.index({ goalId: 1 })
 

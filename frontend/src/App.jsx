@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect } from 'react'
+import { useState, useEffect, useLayoutEffect, lazy, Suspense } from 'react'
 import { motion } from 'framer-motion'
 import {
   FiCheckSquare, FiFileText, FiTarget, FiMessageSquare, FiZap, FiGrid,
@@ -6,16 +6,17 @@ import {
   FiMenu, FiX
 } from 'react-icons/fi'
 import Dashboard from './pages/Dashboard'
-import Tasks from './pages/Tasks'
-import Notes from './pages/Notes'
-import Goals from './pages/Goals'
-import Chat from './pages/Chat'
-import Planner from './pages/Planner'
 import Auth from './pages/Auth'
-import Habits from './pages/Habits'
-import FloatingAssistant from './components/FloatingAssistant'
 import { AppShellProvider } from './context/AppShellContext'
 import './index.css'
+
+const Tasks = lazy(() => import('./pages/Tasks'))
+const Notes = lazy(() => import('./pages/Notes'))
+const Goals = lazy(() => import('./pages/Goals'))
+const Chat = lazy(() => import('./pages/Chat'))
+const Planner = lazy(() => import('./pages/Planner'))
+const Habits = lazy(() => import('./pages/Habits'))
+const FloatingAssistant = lazy(() => import('./components/FloatingAssistant'))
 
 const tabs = [
   { id: 'dashboard', label: 'Dashboard', icon: FiGrid },
@@ -218,18 +219,24 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="main-content">
-        <motion.div key={activeTab}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2 }}>
-          {activeTab === 'dashboard' && <Dashboard />}
-          {activeTab === 'tasks' && <Tasks />}
-          {activeTab === 'notes' && <Notes />}
-          {activeTab === 'goals' && <Goals />}
-          {activeTab === 'habits' && <Habits />}
-          {activeTab === 'planner' && <Planner />}
-          {activeTab === 'chat' && <Chat />}
-        </motion.div>
+        <Suspense fallback={
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '280px', color: 'var(--text-subtle)', fontSize: '0.85rem' }}>
+            Loading...
+          </div>
+        }>
+          <motion.div key={activeTab}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}>
+            {activeTab === 'dashboard' && <Dashboard />}
+            {activeTab === 'tasks' && <Tasks />}
+            {activeTab === 'notes' && <Notes />}
+            {activeTab === 'goals' && <Goals />}
+            {activeTab === 'habits' && <Habits />}
+            {activeTab === 'planner' && <Planner />}
+            {activeTab === 'chat' && <Chat />}
+          </motion.div>
+        </Suspense>
       </main>
 
       {/* Mobile Bottom Navigation Bar */}
@@ -251,7 +258,9 @@ export default function App() {
         })}
       </nav>
 
-      <FloatingAssistant />
+      <Suspense fallback={null}>
+        <FloatingAssistant />
+      </Suspense>
     </div>
     </AppShellProvider>
   )

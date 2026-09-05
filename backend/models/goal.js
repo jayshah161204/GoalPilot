@@ -36,5 +36,6 @@ const GoalSchema = new mongoose.Schema({
 // Index for listing a user's active/completed goals
 GoalSchema.index({ userId: 1, completed: 1 })
 GoalSchema.index({ userId: 1, createdAt: -1 })
+GoalSchema.index({ userId: 1, createdAt: 1 })
 
 module.exports = mongoose.models.Goal || mongoose.model('Goal', GoalSchema)
