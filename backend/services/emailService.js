@@ -141,7 +141,92 @@ async function sendLoginNotificationEmail ({ name, email }) {
   }
 }
 
+/**
+ * Sends a daily morning brief email at 10:00 AM IST with today's tasks and overdue tasks.
+ *
+ * @param {object} params
+ * @param {string} params.name
+ * @param {string} params.email
+ * @param {Array} params.todayTasks
+ * @param {Array} params.overdueTasks
+ */
+async function sendDailyBriefEmail ({ name, email, todayTasks = [], overdueTasks = [] }) {
+  try {
+    const transporter = createTransporter()
+    const appUrl = process.env.APP_URL || 'https://goal-pilot-xi.vercel.app'
+    const fromAddress = process.env.EMAIL_FROM || '"GoalPilot" <notifications@goalpilot.app>'
+
+    const totalCount = todayTasks.length + overdueTasks.length
+    if (totalCount === 0) return false // Nothing to send
+
+    const todayDateFormatted = new Date().toLocaleDateString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric'
+    })
+
+    const subject = overdueTasks.length > 0
+      ? `GoalPilot: ${todayTasks.length} task(s) for today, ${overdueTasks.length} overdue`
+      : `GoalPilot: ${todayTasks.length} task(s) planned for today`
+
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; padding: 28px 24px; background-color: #0f172a; color: #f8fafc; border-radius: 14px; box-sizing: border-box;">
+        <div style="border-bottom: 1px solid #1e293b; padding-bottom: 16px; margin-bottom: 20px;">
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #818cf8;">GoalPilot &bull; Daily Brief</span>
+          <h2 style="font-size: 20px; font-weight: 700; margin: 8px 0 0; color: #ffffff;">Good morning, ${name}!</h2>
+          <p style="margin: 4px 0 0; font-size: 13px; color: #94a3b8;">Here is your focus snapshot for today (${todayDateFormatted}).</p>
+        </div>
+
+        ${todayTasks.length > 0 ? `
+        <div style="margin-bottom: 22px;">
+          <h3 style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #38bdf8; margin: 0 0 10px;">Due Today (${todayTasks.length})</h3>
+          <ul style="margin: 0; padding-left: 18px; color: #e2e8f0; font-size: 14px; line-height: 1.6;">
+            ${todayTasks.map(t => `<li style="margin-bottom: 4px;"><strong>${t.title}</strong>${t.priority === 'high' ? ' <span style="color: #f87171; font-size: 11px; font-weight: 700;">[HIGH]</span>' : ''}</li>`).join('')}
+          </ul>
+        </div>
+        ` : ''}
+
+        ${overdueTasks.length > 0 ? `
+        <div style="margin-bottom: 24px; background-color: #1e1b2e; border: 1px solid #432857; border-radius: 10px; padding: 14px 16px;">
+          <h3 style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #f43f5e; margin: 0 0 8px;">Needs Attention &bull; Overdue (${overdueTasks.length})</h3>
+          <ul style="margin: 0; padding-left: 18px; color: #fda4af; font-size: 13px; line-height: 1.6;">
+            ${overdueTasks.map(t => `<li style="margin-bottom: 4px;"><strong>${t.title}</strong>${t.dueDate ? ` <span style="color: #fca5a5; font-size: 11px;">(Due ${new Date(t.dueDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric' })})</span>` : ''}</li>`).join('')}
+          </ul>
+        </div>
+        ` : ''}
+
+        <div style="text-align: center; margin: 26px 0 18px;">
+          <a href="${appUrl}" style="display: inline-block; background-color: #6366f1; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 28px; border-radius: 8px;">Open GoalPilot</a>
+        </div>
+
+        <div style="border-top: 1px solid #1e293b; padding-top: 14px; text-align: center;">
+          <p style="margin: 0; font-size: 11px; color: #64748b;">This email was sent to ${email} for your daily morning digest.</p>
+        </div>
+      </div>
+    `
+
+    if (transporter) {
+      await transporter.sendMail({
+        from: fromAddress,
+        to: email,
+        subject,
+        html
+      })
+      console.log(`[emailService] Daily brief sent to ${email} (${name})`)
+      return true
+    } else {
+      console.log(`[emailService] (Simulation) Daily brief prepared for ${email} (${name}) - ${totalCount} tasks`)
+      return true
+    }
+  } catch (err) {
+    console.error('[emailService] Failed to send daily brief email:', err.message)
+    return false
+  }
+}
+
 module.exports = {
   sendWelcomeEmail,
-  sendLoginNotificationEmail
+  sendLoginNotificationEmail,
+  sendDailyBriefEmail
 }

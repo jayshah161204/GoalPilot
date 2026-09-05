@@ -133,6 +133,7 @@ app.use('/api/chat', require('./routes/chat'))
 app.use('/api/sessions', require('./routes/sessions'))
 app.use('/api/insights', require('./routes/insights'))
 app.use('/api/planner', require('./routes/planner'))
+app.use('/api/reminders', require('./routes/reminders'))
 
 // 404 handler for unmatched routes
 app.use((req, res) => {
