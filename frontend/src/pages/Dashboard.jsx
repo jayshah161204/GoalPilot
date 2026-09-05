@@ -144,28 +144,43 @@ function getProductivityProfile (tasks) {
   const best = [...buckets].sort((a, b) => b.count - a.count)[0]
   if (sample.length < MIN_COMPLETIONS_FOR_PROFILE || !best?.count) {
     return {
-      label: 'Building profile',
+      label: 'Optimal Focus Rhythm',
       id: 'building',
-      range: 'Try 7-9 PM',
+      range: '7-9 PM (Target)',
+      rawRange: '7-9 PM',
       startHour: 19,
-      confidence: `${completed.length}/${MIN_COMPLETIONS_FOR_PROFILE} task completions logged. Check tasks off when you finish them for better timing.`,
+      hours: [19, 20, 21],
+      confidence: `Calibrating personal flow • ${completed.length}/${MIN_COMPLETIONS_FOR_PROFILE} tasks completed so far. Mark tasks done as you finish them to lock in your rhythm.`,
       count: completed.length,
       confidenceLevel: 'Low'
     }
   }
 
   const share = Math.round((best.count / sample.length) * 100)
-  const confidenceLevel = sample.length >= 12 && share >= 40 ? 'High' : sample.length >= 8 || share >= 35 ? 'Medium' : 'Low'
-  const source = recentCompleted.length >= MIN_COMPLETIONS_FOR_PROFILE ? `last ${RECENT_COMPLETION_DAYS} days` : 'all-time history'
+  const source = recentCompleted.length >= MIN_COMPLETIONS_FOR_PROFILE ? `past 30 days` : 'all-time history'
+
+  // Creative, professional, and tailored insights for each time slot
+  const energyProfiles = {
+    early: 'Peak Sunrise Velocity',
+    morning: 'Prime Momentum & Deep Work',
+    afternoon: 'High-Focus Productivity Sprint',
+    evening: 'Power Hour & Focused Wrap-Up',
+    night: 'Late-Night Quiet Deep Work'
+  }
+
+  const tag = energyProfiles[best.id] || 'Peak Flow Zone'
+  const confidence = `${tag} • ${best.count} of your ${sample.length} tasks (${share}%) were conquered in this window (${source}).`
 
   return {
     label: best.label,
     id: best.id,
-    range: best.range,
+    range: `${best.label} (${best.range})`,
+    rawRange: best.range,
     startHour: best.startHour,
-    confidence: `${confidenceLevel} confidence: ${best.count}/${sample.length} completions happened here from ${source}.`,
+    hours: best.hours,
+    confidence,
     count: best.count,
-    confidenceLevel
+    confidenceLevel: share >= 40 ? 'High' : 'Medium'
   }
 }
 
@@ -274,23 +289,29 @@ export default function Dashboard() {
 
     const checkFocusWindow = () => {
       const now = new Date()
-      const target = new Date(now)
-      target.setHours(productivity.startHour, 0, 0, 0)
-      const reminderWindowEnd = new Date(target.getTime() + 30 * 60 * 1000)
+      const currentHour = now.getHours()
+      const isInWindow = productivity.hours
+        ? productivity.hours.includes(currentHour)
+        : (currentHour >= productivity.startHour && currentHour < productivity.startHour + 3)
       const sentKey = `${dateKey(now)}-${productivity.id || productivity.startHour}`
 
-      if (now < target || now > reminderWindowEnd) return
+      if (!isInWindow) return
       if (localStorage.getItem(FOCUS_REMINDER_LAST_SENT_KEY) === sentKey) return
 
-      new Notification('GoalPilot productivity window', {
-        body: `This is your ${productivity.label.toLowerCase()} productivity slot. Start one clear task now.`
-      })
-      localStorage.setItem(FOCUS_REMINDER_LAST_SENT_KEY, sentKey)
-      setNotifyStatus(`Reminder sent for ${productivity.range}.`)
+      try {
+        new Notification('GoalPilot Focus Window is Live', {
+          body: `You are in your prime energy window (${productivity.range}). Pick your top priority task and dive in.`,
+          icon: '/favicon.svg'
+        })
+        localStorage.setItem(FOCUS_REMINDER_LAST_SENT_KEY, sentKey)
+        setNotifyStatus(`Reminder sent for your ${productivity.label} window.`)
+      } catch (err) {
+        console.error('Notification trigger error:', err)
+      }
     }
 
     checkFocusWindow()
-    const intervalId = window.setInterval(checkFocusWindow, 15000)
+    const intervalId = window.setInterval(checkFocusWindow, 60000)
     window.addEventListener('focus', checkFocusWindow)
     document.addEventListener('visibilitychange', checkFocusWindow)
 
@@ -299,11 +320,18 @@ export default function Dashboard() {
       window.removeEventListener('focus', checkFocusWindow)
       document.removeEventListener('visibilitychange', checkFocusWindow)
     }
-  }, [focusReminderEnabled, productivity.id, productivity.label, productivity.range, productivity.startHour])
+  }, [focusReminderEnabled, productivity.id, productivity.label, productivity.range, productivity.startHour, productivity.hours])
 
-  const enableFocusNotification = async () => {
+  const toggleFocusReminder = async () => {
     if (!('Notification' in window)) {
-      setNotifyStatus('Notifications are not supported here.')
+      setNotifyStatus('Browser notifications are not supported on this device.')
+      return
+    }
+
+    if (focusReminderEnabled) {
+      localStorage.setItem(FOCUS_REMINDER_ENABLED_KEY, 'false')
+      setFocusReminderEnabled(false)
+      setNotifyStatus('Focus reminder turned off.')
       return
     }
 
@@ -312,13 +340,22 @@ export default function Dashboard() {
       : await Notification.requestPermission()
 
     if (permission !== 'granted') {
-      setNotifyStatus('Notifications are blocked.')
+      setNotifyStatus('Notifications are blocked in your browser settings.')
       return
     }
 
     localStorage.setItem(FOCUS_REMINDER_ENABLED_KEY, 'true')
     setFocusReminderEnabled(true)
-    setNotifyStatus(`Reminder on for ${productivity.range}. Keep the dashboard open for browser notifications.`)
+    setNotifyStatus(`Reminder active for ${productivity.range}!`)
+
+    try {
+      new Notification('GoalPilot Focus Reminder Active', {
+        body: `We will alert you during your ${productivity.range} peak focus window.`,
+        icon: '/favicon.svg'
+      })
+    } catch {
+      // Ignored if browser limits background notification
+    }
   }
 
   return (
@@ -417,12 +454,30 @@ export default function Dashboard() {
           <p style={{ fontSize: '1rem', color: 'var(--text-strong)', fontWeight: 800, marginBottom: '0.2rem' }}>{productivity.range}</p>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', lineHeight: 1.5, marginBottom: '0.75rem' }}>{productivity.confidence}</p>
           <button
-            onClick={enableFocusNotification}
-            style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-border)', borderRadius: '8px', padding: '0.35rem 0.6rem', color: 'var(--accent)', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, fontFamily: 'Inter', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+            onClick={toggleFocusReminder}
+            style={{
+              background: focusReminderEnabled ? 'var(--accent)' : 'var(--accent-soft)',
+              border: `1px solid ${focusReminderEnabled ? 'var(--accent)' : 'var(--accent-border)'}`,
+              borderRadius: '8px',
+              padding: '0.35rem 0.65rem',
+              color: focusReminderEnabled ? '#fff' : 'var(--accent)',
+              cursor: 'pointer',
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              fontFamily: 'Inter',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              transition: 'all 0.2s'
+            }}
           >
-            <FiBell size={11} /> {focusReminderEnabled ? 'Reminder on' : 'Notify me'}
+            <FiBell size={11} /> {focusReminderEnabled ? '✓ Reminder active' : 'Notify me'}
           </button>
-          {notifyStatus && <p style={{ color: 'var(--text-subtle)', fontSize: '0.68rem', marginTop: '0.45rem' }}>{notifyStatus}</p>}
+          {notifyStatus && (
+            <p style={{ color: focusReminderEnabled ? 'var(--accent)' : 'var(--text-subtle)', fontSize: '0.68rem', marginTop: '0.45rem', fontWeight: 500 }}>
+              {notifyStatus}
+            </p>
+          )}
         </motion.div>
 
         <motion.div className="card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
