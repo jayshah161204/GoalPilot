@@ -24,7 +24,13 @@ const ICONS = [
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
-const toDateStr = (date) => date.toISOString().split('T')[0]
+const toDateStr = (date) => {
+  const d = new Date(date)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 const getStreak = (completedDates) => {
   let streak = 0
@@ -69,53 +75,106 @@ function HabitIcon({ iconId, size = 16, color = 'var(--accent)' }) {
   return <IconComp size={size} color={color} />
 }
 
-function Heatmap({ completedDates, color }) {
+function Heatmap({ completedDates, color, onToggleDate }) {
   const days = getLast365Days()
-  const firstDayOfWeek = new Date(days[0]).getDay()
-  const padded = [...Array(firstDayOfWeek).fill(null), ...days]
-  const weeks = []
-  for (let i = 0; i < padded.length; i += 7) weeks.push(padded.slice(i, i + 7))
+  const todayStr = toDateStr(new Date())
 
+  // Day of week for the first day (0 = Sunday) using local calendar components
+  const [startY, startM, startD] = days[0].split('-').map(Number)
+  const firstDayOfWeek = new Date(startY, startM - 1, startD).getDay()
+
+  // Pad the beginning so the first week aligns with Sunday
+  const padded = [...Array(firstDayOfWeek).fill(null), ...days]
+
+  // Pad the end of the last week so all weeks are full 7-day columns
+  const remainder = padded.length % 7
+  if (remainder !== 0) {
+    padded.push(...Array(7 - remainder).fill(null))
+  }
+
+  // Chunk into 7-day weeks
+  const weeks = []
+  for (let i = 0; i < padded.length; i += 7) {
+    weeks.push(padded.slice(i, i + 7))
+  }
+
+  // Mark the week index where each new month begins (day === 1)
   const monthLabels = {}
+  let lastMonth = null
   weeks.forEach((week, wi) => {
-    week.forEach(day => {
-      if (day && new Date(day).getDate() === 1) {
-        const m = new Date(day).getMonth()
-        if (!Object.values(monthLabels).includes(MONTHS[m])) {
+    for (const day of week) {
+      if (day) {
+        const parts = day.split('-')
+        const d = parseInt(parts[2], 10)
+        const m = parseInt(parts[1], 10) - 1
+        if (d === 1 && m !== lastMonth) {
           monthLabels[wi] = MONTHS[m]
+          lastMonth = m
+          break
         }
       }
-    })
+    }
   })
 
+  const formatTooltip = (day, isDone) => {
+    if (!day) return ''
+    const [y, m, d] = day.split('-').map(Number)
+    const dateObj = new Date(y, m - 1, d)
+    const formattedDate = dateObj.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    })
+    return `${formattedDate} — ${isDone ? 'Completed' : 'No activity'}`
+  }
+
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <div style={{ position: 'relative', minWidth: 'fit-content' }}>
-        <div style={{ display: 'flex', marginBottom: '4px', marginLeft: '18px' }}>
-          {weeks.map((_, wi) => (
-            <div key={wi} style={{ width: 13, marginRight: 2, fontSize: '0.62rem', color: 'var(--text-subtle)', flexShrink: 0 }}>
-              {monthLabels[wi] || ''}
-            </div>
-          ))}
-        </div>
+    <div style={{ overflowX: 'auto', paddingBottom: '6px' }}>
+      <div style={{ position: 'relative', minWidth: 'fit-content', paddingRight: '28px' }}>
         <div style={{ display: 'flex', gap: 2 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginRight: 2 }}>
+          {/* Day of week labels (M, W, F) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginRight: 4, width: 14, flexShrink: 0 }}>
+            <div style={{ height: 14 }} /> {/* Header spacer */}
             {['S','M','T','W','T','F','S'].map((d, i) => (
-              <div key={i} style={{ height: 11, fontSize: '0.58rem', color: 'var(--text-subtle)', lineHeight: '11px' }}>
+              <div key={i} style={{ height: 11, fontSize: '0.58rem', color: 'var(--text-subtle)', lineHeight: '11px', textAlign: 'right' }}>
                 {i % 2 === 1 ? d : ''}
               </div>
             ))}
           </div>
+
+          {/* Week columns: Each column contains its own month header cell + 7 day boxes */}
           {weeks.map((week, wi) => (
-            <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {week.map((day, di) => (
-                <div key={di} title={day || ''} style={{
-                  width: 11, height: 11, borderRadius: 2, flexShrink: 0,
-                  background: !day ? 'transparent' : completedDates.includes(day) ? color : 'var(--border)',
-                  opacity: !day ? 0 : 1,
-                  transition: 'background 0.2s'
-                }} />
-              ))}
+            <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0, width: 11 }}>
+              <div style={{ height: 14, position: 'relative' }}>
+                {monthLabels[wi] && (
+                  <span style={{ position: 'absolute', left: 0, top: 0, fontSize: '0.62rem', color: 'var(--text-subtle)', fontWeight: 600, whiteSpace: 'nowrap', pointerEvents: 'none' }}>
+                    {monthLabels[wi]}
+                  </span>
+                )}
+              </div>
+              {week.map((day, di) => {
+                const isDone = Boolean(day && completedDates.includes(day))
+                const isFuture = Boolean(day && day > todayStr)
+                const isClickable = Boolean(day && !isFuture && onToggleDate)
+
+                return (
+                  <div
+                    key={di}
+                    title={formatTooltip(day, isDone)}
+                    onClick={() => isClickable && onToggleDate(day)}
+                    style={{
+                      width: 11,
+                      height: 11,
+                      borderRadius: 2,
+                      flexShrink: 0,
+                      background: !day ? 'transparent' : isDone ? color : 'var(--border)',
+                      opacity: !day ? 0 : 1,
+                      cursor: isClickable ? 'pointer' : 'default',
+                      transition: 'background 0.2s'
+                    }}
+                  />
+                )
+              })}
             </div>
           ))}
         </div>
@@ -251,9 +310,9 @@ export default function Habits() {
     }
   }
 
-  const handleToggle = async (id) => {
+  const handleToggle = async (id, targetDate = today) => {
     try {
-      const { data: updated } = await toggleHabit(id, today)
+      const { data: updated } = await toggleHabit(id, targetDate)
       setHabits(prev => prev.map(h => h._id === id ? updated : h))
     } catch (e) {
       console.error('Failed to toggle habit:', e)
@@ -362,7 +421,11 @@ export default function Habits() {
                     </div>
                   </div>
 
-                  <Heatmap completedDates={habit.completedDates} color={habit.color} />
+                  <Heatmap
+                    completedDates={habit.completedDates}
+                    color={habit.color}
+                    onToggleDate={(date) => handleToggle(habit._id, date)}
+                  />
                 </motion.div>
               )
             })}

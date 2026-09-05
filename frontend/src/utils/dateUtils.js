@@ -14,7 +14,10 @@
  */
 export const dateKey = (value) => {
   const d = value instanceof Date ? value : new Date(value)
-  return d.toISOString().split('T')[0]
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 /**
@@ -37,7 +40,13 @@ export const formatDateKey = (key) => {
  * @param {Date} date
  * @returns {string} Date in 'YYYY-MM-DD' format
  */
-export const toDateStr = (date) => date.toISOString().split('T')[0]
+export const toDateStr = (date) => {
+  const d = new Date(date)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 /**
  * Calculates the current consecutive-day streak for a habit.
