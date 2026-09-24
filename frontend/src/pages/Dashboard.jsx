@@ -284,8 +284,10 @@ export default function Dashboard() {
     else break
   }
 
+  const [inAppProdNotification, setInAppProdNotification] = useState(null)
+
   useEffect(() => {
-    if (!focusReminderEnabled || !('Notification' in window) || Notification.permission !== 'granted') return
+    if (!focusReminderEnabled) return
 
     const checkFocusWindow = () => {
       const now = new Date()
@@ -298,15 +300,23 @@ export default function Dashboard() {
       if (!isInWindow) return
       if (localStorage.getItem(FOCUS_REMINDER_LAST_SENT_KEY) === sentKey) return
 
-      try {
-        new Notification('GoalPilot Focus Window is Live', {
-          body: `You are in your prime energy window (${productivity.range}). Pick your top priority task and dive in.`,
-          icon: '/favicon.svg'
-        })
-        localStorage.setItem(FOCUS_REMINDER_LAST_SENT_KEY, sentKey)
-        setNotifyStatus(`Reminder sent for your ${productivity.label} window.`)
-      } catch (err) {
-        console.error('Notification trigger error:', err)
+      // In-app notification for guaranteed visibility
+      setInAppProdNotification({
+        title: 'GoalPilot Focus Window is Live',
+        body: `You are in your prime energy window (${productivity.range}). Pick your top priority task and dive in.`,
+        sentKey
+      })
+      
+      // Also attempt OS notification if permitted
+      if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+          new Notification('GoalPilot Focus Window is Live', {
+            body: `You are in your prime energy window (${productivity.range}). Pick your top priority task and dive in.`,
+            icon: '/favicon.svg'
+          })
+        } catch (err) {
+          console.error('Notification trigger error:', err)
+        }
       }
     }
 
@@ -323,11 +333,6 @@ export default function Dashboard() {
   }, [focusReminderEnabled, productivity.id, productivity.label, productivity.range, productivity.startHour, productivity.hours])
 
   const toggleFocusReminder = async () => {
-    if (!('Notification' in window)) {
-      setNotifyStatus('Browser notifications are not supported on this device.')
-      return
-    }
-
     if (focusReminderEnabled) {
       localStorage.setItem(FOCUS_REMINDER_ENABLED_KEY, 'false')
       setFocusReminderEnabled(false)
@@ -335,31 +340,51 @@ export default function Dashboard() {
       return
     }
 
-    const permission = Notification.permission === 'granted'
-      ? 'granted'
-      : await Notification.requestPermission()
-
-    if (permission !== 'granted') {
-      setNotifyStatus('Notifications are blocked in your browser settings.')
-      return
+    if ('Notification' in window) {
+      const permission = Notification.permission === 'granted'
+        ? 'granted'
+        : await Notification.requestPermission()
+      
+      if (permission !== 'granted') {
+        setNotifyStatus('OS Notifications blocked. You will still see in-app alerts.')
+      } else {
+        setNotifyStatus(`Reminder active for ${productivity.range}!`)
+        try {
+          new Notification('GoalPilot Focus Reminder Active', {
+            body: `We will alert you during your ${productivity.range} peak focus window.`,
+            icon: '/favicon.svg'
+          })
+        } catch {
+          // Ignored
+        }
+      }
+    } else {
+      setNotifyStatus('OS Notifications unsupported. In-app alerts will be used.')
     }
 
     localStorage.setItem(FOCUS_REMINDER_ENABLED_KEY, 'true')
     setFocusReminderEnabled(true)
-    setNotifyStatus(`Reminder active for ${productivity.range}!`)
-
-    try {
-      new Notification('GoalPilot Focus Reminder Active', {
-        body: `We will alert you during your ${productivity.range} peak focus window.`,
-        icon: '/favicon.svg'
-      })
-    } catch {
-      // Ignored if browser limits background notification
-    }
   }
 
   return (
     <div style={{ paddingBottom: '2rem' }}>
+      {inAppProdNotification && (
+        <div style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-border)', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <p style={{ color: 'var(--accent-strong)', fontSize: '0.9rem', fontWeight: 700, marginBottom: '0.2rem' }}>{inAppProdNotification.title}</p>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem' }}>{inAppProdNotification.body}</p>
+          </div>
+          <button 
+            onClick={() => {
+              localStorage.setItem(FOCUS_REMINDER_LAST_SENT_KEY, inAppProdNotification.sentKey)
+              setNotifyStatus(`Reminder dismissed for your ${productivity.label} window.`)
+              setInAppProdNotification(null)
+            }} 
+            style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.4rem 0.6rem', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, fontFamily: 'Inter', flexShrink: 0 }}>
+            Dismiss
+          </button>
+        </div>
+      )}
       {error && (
         <div style={{ background: 'var(--danger-soft)', border: '1px solid var(--danger-border)', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <p style={{ color: 'var(--danger)', fontSize: '0.85rem', fontWeight: 600 }}>{error}</p>
