@@ -4,8 +4,8 @@ const AppError = require('./AppError')
 /** @type {Groq | null} */
 let client = null
 
-const PRIMARY_MODEL = 'openai/gpt-oss-120b'
-const FALLBACK_MODELS = ['openai/gpt-oss-20b', 'qwen/qwen3.8-27b']
+const PRIMARY_MODEL = 'qwen/qwen3.8-27b'
+const FALLBACK_MODELS = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b']
 
 /**
  * Returns a shared Groq SDK client, created on first use.
