@@ -41,7 +41,7 @@ async function sendWelcomeEmail ({ name, email }) {
   try {
     const transporter = createTransporter()
     const appUrl = process.env.APP_URL || 'https://goal-pilot-xi.vercel.app'
-    const fromAddress = process.env.EMAIL_FROM || '"GoalPilot AI" <notifications@goalpilot.app>'
+    const fromAddress = process.env.EMAIL_FROM || '"GoalPilot AI" <goalpilot.app@gmail.com>'
 
     const html = `
       <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 24px; background-color: #0d1520; color: #f1f5f9; border-radius: 16px;">
@@ -103,7 +103,7 @@ async function sendLoginNotificationEmail ({ name, email }) {
   try {
     const transporter = createTransporter()
     const appUrl = process.env.APP_URL || 'https://goal-pilot-xi.vercel.app'
-    const fromAddress = process.env.EMAIL_FROM || '"GoalPilot Security" <security@goalpilot.app>'
+    const fromAddress = process.env.EMAIL_FROM || '"GoalPilot Security" <goalpilot.app@gmail.com>'
 
     const html = `
       <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 540px; margin: 0 auto; padding: 28px 20px; background-color: #0d1520; color: #f1f5f9; border-radius: 16px;">
@@ -154,7 +154,7 @@ async function sendDailyBriefEmail ({ name, email, todayTasks = [], overdueTasks
   try {
     const transporter = createTransporter()
     const appUrl = process.env.APP_URL || 'https://goal-pilot-xi.vercel.app'
-    const fromAddress = process.env.EMAIL_FROM || '"GoalPilot" <notifications@goalpilot.app>'
+    const fromAddress = process.env.EMAIL_FROM || '"GoalPilot" <goalpilot.app@gmail.com>'
 
     const totalCount = todayTasks.length + overdueTasks.length
     if (totalCount === 0) return false // Nothing to send
